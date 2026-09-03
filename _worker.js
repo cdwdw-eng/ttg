@@ -11,6 +11,13 @@ let 优选IP列表 = [];
 let 优选IP最后加载时间 = 0;
 const 优选IP缓存时间 = 300 * 1000; // 5 分钟缓存
 
+// === GitHub 默认 URL (不需要环境变量) ===
+const DEFAULT_IP_URLS = [
+  "https://raw.githubusercontent.com/cdwdw-eng/ttg/main/best-ips.txt",
+  // 备用: GitHub Pages 镜像
+  "https://cdwdw-eng.github.io/ttg/best-ips.txt",
+];
+
 const 默认优选 = "time.is";
 
 // 关键词拆分(防检测)
@@ -33,23 +40,18 @@ async function 加载优选IP(env) {
     return; // 缓存有效
   }
 
-  // 从 env.IP_FILE_URL 读取（默认指向 GitHub raw）
-  const IP_FILE_URL = env.IP_FILE_URL || "";
-
-  if (!IP_FILE_URL) {
-    console.log(`[优选IP] 未配置 IP_FILE_URL，使用反代 ${反代IP}`);
-    return;
-  }
+  // 从 env.IP_FILE_URL 读取，否则用默认的 GitHub URL
+  const IP_FILE_URL = env.IP_FILE_URL || DEFAULT_IP_URLS[0];
 
   try {
     console.log(`[优选IP] 从 ${IP_FILE_URL} 加载...`);
     const response = await fetch(IP_FILE_URL, {
       cf: { cacheTtl: 0 }, // 绕过 CF 缓存，强制刷新
-      headers: { 'User-Agent': 'CF-Pages-Worker' }
+      headers: { 'User-Agent': 'CF-Pages-Worker/1.0' }
     });
 
     if (!response.ok) {
-      console.log(`[优选IP] HTTP ${response.status} 失败，回退到反代IP`);
+      console.log(`[优选IP] HTTP ${response.status} 失败`);
       return;
     }
 
