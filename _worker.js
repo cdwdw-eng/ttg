@@ -305,34 +305,41 @@ async function 提示界面() {
 }
 
 function 威图锐配置文件(hostName) {
+  // 如果有优选IP列表，用每个IP生成一个vless URL
+  if (优选IP列表.length > 0) {
+    const urls = 优选IP列表.map((ip, i) => {
+      return `${维列斯}://${验证UUID}@${ip.hostname}:${ip.port}?encryption=none&security=tls&sni=${hostName}&fp=chrome&type=ws&host=${hostName}#${ip.hostname}`;
+    });
+    return new Response(urls.join('\n'));
+  }
+  // 没有优选IP时回退到默认
   let 最终地址 = hostName.endsWith('.pages.dev') ? 默认优选 : hostName;
   const 配置内容 = `${维列斯}://${验证UUID}@${最终地址}:443?encryption=none&security=tls&sni=${hostName}&fp=chrome&type=ws&host=${hostName}#${最终地址}`;
   return new Response(配置内容);
 }
 
 function 科拉什配置文件(hostName) {
-  let 最终地址 = hostName.endsWith('.pages.dev') ? 默认优选 : hostName;
+  // 如果有优选IP列表，为每个IP生成proxy
+  let proxies = '';
+  let proxyNames = [];
+  if (优选IP列表.length > 0) {
+    优选IP列表.forEach((ip, i) => {
+      const name = `IP${i+1}-${ip.hostname}`;
+      proxyNames.push(name);
+      proxies += `- name: ${name}\n  type: ${维列斯}\n  server: ${ip.hostname}\n  port: ${ip.port}\n  uuid: ${验证UUID}\n  udp: true\n  tls: true\n  sni: ${hostName}\n  network: ws\n  ws-opts:\n    headers:\n      Host: ${hostName}\n      User-Agent: Chrome\n\n`;
+    });
+  } else {
+    let 最终地址 = hostName.endsWith('.pages.dev') ? 默认优选 : hostName;
+    proxyNames.push(最终地址);
+    proxies = `- name: ${最终地址}\n  type: ${维列斯}\n  server: ${最终地址}\n  port: 443\n  uuid: ${验证UUID}\n  udp: true\n  tls: true\n  sni: ${hostName}\n  network: ws\n  ws-opts:\n    headers:\n      Host: ${hostName}\n      User-Agent: Chrome\n\n`;
+  }
   const 配置内容 = `
 proxies:
-- name: ${最终地址}
-  type: ${维列斯}
-  server: ${最终地址}
-  port: 443
-  uuid: ${验证UUID}
-  udp: true
-  tls: true
-  sni: ${hostName}
-  network: ws
-  ws-opts:
-    headers:
-      Host: ${hostName}
-      User-Agent: Chrome
-
-proxy-groups:
+${proxies}proxy-groups:
 - name: 节点列表
   type: select
   proxies:
-    - ${最终地址}
+${proxyNames.map(n => `    - ${n}`).join('\n')}
 
 rules:
   - GEOSITE,cn,DIRECT
