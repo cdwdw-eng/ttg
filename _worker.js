@@ -6,6 +6,11 @@ let 伪装网页;
 let 验证UUID;
 let 反代IP = "proxyip.cmliussss.net";
 
+// === 新增：优选IP相关 ===
+let 优选IP列表 = [];
+let 优选IP最后加载时间 = 0;
+const 优选IP缓存时间 = 300 * 1000; // 5 分钟缓存
+
 const 默认优选 = "time.is";
 
 // 关键词拆分(防检测)
@@ -20,13 +25,79 @@ const 维列斯 = 维列斯拆分.join("");
 // 转换密钥格式
 const 转换密钥格式 = Array.from({ length: 256 }, (_, i) => (i + 256).toString(16).slice(1));
 
+// === 新增：从外部 TXT 文件加载优选IP ===
+async function 加载优选IP(env) {
+  // 检查缓存是否过期
+  const now = Date.now();
+  if (优选IP列表.length > 0 && (now - 优选IP最后加载时间) < 优选IP缓存时间) {
+    return; // 缓存有效
+  }
+
+  // 从 env.IP_FILE_URL 读取（默认指向 GitHub raw）
+  const IP_FILE_URL = env.IP_FILE_URL || "";
+
+  if (!IP_FILE_URL) {
+    console.log(`[优选IP] 未配置 IP_FILE_URL，使用反代 ${反代IP}`);
+    return;
+  }
+
+  try {
+    console.log(`[优选IP] 从 ${IP_FILE_URL} 加载...`);
+    const response = await fetch(IP_FILE_URL, {
+      cf: { cacheTtl: 0 }, // 绕过 CF 缓存，强制刷新
+      headers: { 'User-Agent': 'CF-Pages-Worker' }
+    });
+
+    if (!response.ok) {
+      console.log(`[优选IP] HTTP ${response.status} 失败，回退到反代IP`);
+      return;
+    }
+
+    const text = await response.text();
+    // 解析 TXT 文件：每行一个 IP[:PORT]
+    优选IP列表 = text.split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#')) // 过滤空行和注释
+      .map(line => {
+        // 支持格式：IP, IP:PORT, domain:PORT
+        const parts = line.split(':');
+        if (parts.length === 1) {
+          return { hostname: parts[0], port: 443 };
+        } else if (parts.length === 2) {
+          return { hostname: parts[0], port: parseInt(parts[1]) };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    优选IP最后加载时间 = now;
+    console.log(`[优选IP] 成功加载 ${优选IP列表.length} 个 IP`);
+  } catch (e) {
+    console.log(`[优选IP] 加载失败: ${e.message}`);
+  }
+}
+
+// === 新增：随机选一个反代 IP ===
+function 选择反代IP() {
+  if (优选IP列表.length === 0) {
+    // 回退到默认反代IP
+    const [ip, port = 443] = 反代IP.split(":");
+    return { hostname: ip, port: parseInt(port) };
+  }
+  // 随机选一个优选 IP
+  return 优选IP列表[Math.floor(Math.random() * 优选IP列表.length)];
+}
+
 // 网页入口
 export default {
-  async fetch(访问请求, env) {
+  async fetch(访问请求, env, ctx) {
     订阅路径 = env.SUB_PATH ?? 订阅路径;
     验证UUID = 生成UUID();
     反代IP = env.PROXY_IP ?? 反代IP;
     伪装网页 = env.FAKE_WEB;
+
+    // === 新增：异步加载优选 IP ===
+    ctx.waitUntil(加载优选IP(env));
 
     const url = new URL(访问请求.url);
     const 读取我的请求标头 = 访问请求.headers.get("Upgrade");
@@ -175,8 +246,10 @@ async function 启动传输管道(WS接口) {
       TCP接口 = connect({ hostname: 访问地址, port: 访问端口 });
       await TCP接口.opened;
     } catch {
-      const [反代IP地址, 反代IP端口 = 访问端口] = 反代IP.split(":");
-      TCP接口 = connect({ hostname: 反代IP地址, port: 反代IP端口 });
+      // === 修改：使用优选IP列表随机选择反代 ===
+      const { hostname, port } = 选择反代IP();
+      console.log(`[反代] 失败，目标 ${访问地址}:${访问端口} 不可达，使用反代 ${hostname}:${port}`);
+      TCP接口 = connect({ hostname, port });
       await TCP接口.opened;
     }
 
@@ -221,6 +294,11 @@ function 生成UUID() {
 
 // 订阅页面
 async function 提示界面() {
+  // === 新增：显示优选 IP 数量 ===
+  const 优选状态 = 优选IP列表.length > 0
+    ? `优选IP: ${优选IP列表.length} 个`
+    : '未配置优选IP (回退反代)';
+
   const 提示界面 = `
 <title>订阅-${订阅路径}</title>
 <style>
@@ -239,6 +317,8 @@ async function 提示界面() {
   }
 </style>
 <strong>请把链接导入 ${科拉什} 或 ${威图锐}</strong>
+<br><br>
+<small>${优选状态}</small>
 `;
 
   return new Response(提示界面, {
