@@ -8,12 +8,12 @@ let 反代IP = "proxyip.cmliussss.net";
 
 // === Hardcoded 优选IP（不依赖任何外部URL） ===
 let 优选IP列表 = [
-  { hostname: "172.67.72.230", port: 443 },
-  { hostname: "104.26.15.2", port: 443 },
-  { hostname: "104.26.1.55", port: 443 },
-  { hostname: "104.26.10.200", port: 443 },
-  { hostname: "172.67.74.227", port: 443 },
-  { hostname: "104.26.10.85", port: 443 },
+  { hostname: "104.26.5.110", port: 443 },
+  { hostname: "104.26.4.255", port: 443 },
+  { hostname: "172.67.79.254", port: 443 },
+  { hostname: "104.26.5.3", port: 443 },
+  { hostname: "104.26.6.49", port: 443 },
+  { hostname: "104.26.14.98", port: 443 },
 ];
 
 const 默认优选 = "time.is";
